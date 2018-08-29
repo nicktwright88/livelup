@@ -36,7 +36,7 @@ public class Movement : MonoBehaviour {
     //game vars
     bool homeSet = false;
     Vector3 newPosition;
-    static Activity myActivity
+    //static Activity myActivity;
 
     Dictionary<string, int> dict = new Dictionary<string,int>();
 

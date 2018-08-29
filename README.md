@@ -21,10 +21,6 @@ Authors
 
 Nicholas Wright - concept, development, testing, etc.
 
-License
-
-This project is licensed under the MIT License - see the LICENSE.md file for details
-
 Acknowledgments
 
 My wife, for her amazing support.

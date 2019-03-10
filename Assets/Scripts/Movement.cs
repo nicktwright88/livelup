@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
 using System.Collections.Generic;
+using System.Collections;
 using System;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.IO;
@@ -49,21 +50,49 @@ public class Movement : MonoBehaviour {
     AndroidJavaClass customClass;
 
     // Use this for initialization
-    void Start ()
+    IEnumerator Start ()
     {
-
-        loadData();
+        Debug.Log("WHAT'S UP DOC?");
+        Debug.Log(Input.location.status);
         /*groundClone = Instantiate(groundPrefab,
                                     new Vector3(rb2.position.x, rb2.position.y), Quaternion.identity) as GameObject;*/
+
         Input.location.Start();
+
+        // First, check if user has location service enabled
+        while (!Input.location.isEnabledByUser)
+        {
+            Debug.Log("HUH?");
+            yield return new WaitForSeconds(1);
+        }
+
+        Input.location.Start();
+
+        Debug.Log(Input.location.status);
+
+        //start getting GPS location every second
+        InvokeRepeating("getGPSLoc", 0.0f, 1f);
+
+        if (!Input.location.isEnabledByUser)
+        {
+            Debug.Log("NOT ENABLED");
+            yield break;
+        }
+
+        if (Input.location.status == LocationServiceStatus.Failed)
+        {
+            Debug.Log("Unable to determine device location");
+        }
+
+        Debug.Log("Should be working");
+        Debug.Log(Input.location.status);
+
+        loadData();
     }
 	
 	// Update is called once per frame
 	void Update ()
     {
-
-        //start getting GPS location every second
-        InvokeRepeating("getGPSLoc", 0.0f, 1f);
 
         //
         latitude = li.latitude;
@@ -142,7 +171,19 @@ public class Movement : MonoBehaviour {
 
     void getGPSLoc()
     {
-        li = Input.location.lastData;
+        if (Input.location.status != LocationServiceStatus.Running)
+        {
+            /*
+            Debug.Log("WHY DOES THIS NOT WORK");
+            print("WHY DOES THIS NOT WORK");
+
+            Debug.Log(Input.location.status);
+            print(Input.location.status);*/
+
+        } else
+        {
+            li = Input.location.lastData;
+        }
     }
 
     void setHomeGPS()
@@ -184,7 +225,7 @@ public class Movement : MonoBehaviour {
         FileStream file = File.Create(Application.persistentDataPath + "/map.dat");
 
         mapMap data = new mapMap();
-        data.sup = "YES";
+        data.saved = "YES";
         data.dict = dict;
 
         bf.Serialize(file, data);
@@ -193,8 +234,11 @@ public class Movement : MonoBehaviour {
 
     void loadData()
     {
-        if(File.Exists(Application.persistentDataPath + "/map.dat"))
+        Debug.Log("Map file Length: " + new FileInfo(Application.persistentDataPath + "/map.dat").Length);
+
+        if(File.Exists(Application.persistentDataPath + "/map.dat") && new FileInfo(Application.persistentDataPath + "/map.dat").Length != 0)
         {
+            
             BinaryFormatter bf = new BinaryFormatter();
             FileStream file = File.Open(Application.persistentDataPath + "/map.dat", FileMode.Open);
             mapMap data = (mapMap)bf.Deserialize(file);
@@ -219,7 +263,7 @@ public class Movement : MonoBehaviour {
 [Serializable] 
 class mapMap
 {
-    public string sup = "NO";
+    public string saved = "NO";
     public Dictionary<string, int> dict;
 
     public int getDictVals()

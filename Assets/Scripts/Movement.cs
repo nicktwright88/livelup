@@ -31,27 +31,30 @@ public class Movement : MonoBehaviour {
     int newSquareLong = -181;
     int currSquareLat = -91;
     int currSquareLong = -181;
-    int homeSquareLat = -91;
-    int homeSquareLong = -181;
+    public int homeSquareLat = -91;
+    public int homeSquareLong = -181;
 
     //game vars
     bool homeSet = false;
     Vector3 newPosition;
     //static Activity myActivity;
 
-    Dictionary<string, int> dict = new Dictionary<string,int>();
+    //SAVE DATA
+    Dictionary<string, int> dict = new Dictionary<string, int>();
 
     //used to approximate GPS to game board. Higher = more precision, less stability
     int reducer = 10000; //default 10000
 
-    //used for setting up Service (for running in background)
+    //used for setting up Service (for running in background) (not currently working)
     AndroidJavaClass unityClass;
     AndroidJavaObject unityActivity;
     AndroidJavaClass customClass;
 
     // Use this for initialization
-    IEnumerator Start ()
+    IEnumerator Start()
     {
+        loadData();
+
         Debug.Log("WHAT'S UP DOC?");
         Debug.Log(Input.location.status);
         /*groundClone = Instantiate(groundPrefab,
@@ -86,12 +89,10 @@ public class Movement : MonoBehaviour {
 
         Debug.Log("Should be working");
         Debug.Log(Input.location.status);
-
-        loadData();
     }
-	
-	// Update is called once per frame
-	void Update ()
+
+    // Update is called once per frame
+    void Update()
     {
 
         //
@@ -120,7 +121,8 @@ public class Movement : MonoBehaviour {
         {
             Invoke("setHomeGPS", 1);
         }
-        
+
+        //for debugging within Unity Desktop
         if (!homeSet)
         {
             if (Input.GetKeyDown("w")) {
@@ -227,8 +229,10 @@ public class Movement : MonoBehaviour {
         mapMap data = new mapMap();
         data.saved = "YES";
         data.dict = dict;
+        data.homeSquareLat = homeSquareLat;
+        data.homeSquareLong = homeSquareLong;
 
-        bf.Serialize(file, data);
+    bf.Serialize(file, data);
         file.Close();
     }
 
@@ -245,6 +249,11 @@ public class Movement : MonoBehaviour {
             file.Close();
             
             dict = data.dict;
+            homeSquareLat = data.homeSquareLat;
+            homeSquareLong = data.homeSquareLong;
+            homeSquareLongText.text = homeSquareLong.ToString();
+            homeSquareLatText.text = homeSquareLat.ToString();
+            homeSet = true;
 
             //List<string> dictlist = new List<string>(data.dict.Keys);
 
@@ -265,6 +274,8 @@ class mapMap
 {
     public string saved = "NO";
     public Dictionary<string, int> dict;
+    public int homeSquareLat;
+    public int homeSquareLong;
 
     public int getDictVals()
     {

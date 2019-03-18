@@ -21,7 +21,7 @@ public class Movement : MonoBehaviour {
     public Text homeSquareLatText;
     public Text homeSquareLongText;
 
-    //lat&long HOLY INFO
+    //lat&long
     LocationInfo li;
 
     //lat/long measurements
@@ -37,7 +37,8 @@ public class Movement : MonoBehaviour {
     //game vars
     bool homeSet = false;
     Vector3 newPosition;
-    //static Activity myActivity;
+    bool noSavedFile = false;
+    bool saveFileSynced = false;
 
     Dictionary<string, int> dict = new Dictionary<string,int>();
 
@@ -52,161 +53,179 @@ public class Movement : MonoBehaviour {
     // Use this for initialization
     IEnumerator Start ()
     {
-        Debug.Log("WHAT'S UP DOC?");
-        Debug.Log(Input.location.status);
-        /*groundClone = Instantiate(groundPrefab,
-                                    new Vector3(rb2.position.x, rb2.position.y), Quaternion.identity) as GameObject;*/
+        LoadData();
 
+        //Initialize GPS Service
+        Debug.Log("Initializing...");
+
+        //Start locaiton services
+        //If user has not given permission, this triggers permission request
         Input.location.Start();
 
-        // First, check if user has location service enabled
+        //While user has not given location permission, wait for them to do it
+        //TODO: Add fail-out
         while (!Input.location.isEnabledByUser)
         {
-            Debug.Log("HUH?");
+            Debug.Log("Waiting for location service...");
             yield return new WaitForSeconds(1);
         }
 
+        //Starts location services if user has JUST given permission
+        //TODO: Determine if needed or if it can be rolled up into above
         Input.location.Start();
+        yield return new WaitForSeconds(1);
+        Debug.Log(Input.location.status);
+
+        if (!Input.location.isEnabledByUser || Input.location.status == LocationServiceStatus.Failed)
+        {
+            Debug.Log("Could not determine device location");
+            yield break;
+        }
 
         Debug.Log(Input.location.status);
 
         //start getting GPS location every second
-        InvokeRepeating("getGPSLoc", 0.0f, 1f);
+        Debug.Log("Grabbing GPS Location every second");
+        InvokeRepeating("GetGPSLoc", 0.0f, 1f);
 
-        if (!Input.location.isEnabledByUser)
+        //start saving the game every 10 second
+        Debug.Log("Saving the game every 10 seconds");
+        InvokeRepeating("SaveData", 0.0f, 1f);
+
+        while (newSquareLong == 0 && newSquareLat == 0)
         {
-            Debug.Log("NOT ENABLED");
-            yield break;
+            Debug.Log("Waiting for current GPS Location...");
+            yield return new WaitForSeconds(1);
         }
 
-        if (Input.location.status == LocationServiceStatus.Failed)
-        {
-            Debug.Log("Unable to determine device location");
-        }
-
-        Debug.Log("Should be working");
-        Debug.Log(Input.location.status);
-
-        loadData();
+        UpdatePosition(newSquareLong, newSquareLat);
     }
 	
 	// Update is called once per frame
 	void Update ()
     {
 
-        //
-        latitude = li.latitude;
-        longitude = li.longitude;
-
-        latitudeText.text = latitude.ToString("N6");
-        longitudeText.text = longitude.ToString("N6");
-
-        newSquareLat = Mathf.RoundToInt(latitude * reducer);
-        squareLatText.text = newSquareLat.ToString();
-
-        newSquareLong = Mathf.RoundToInt(longitude * reducer);
-        squareLongText.text = newSquareLong.ToString();
-
-
-        if (Input.touchCount == 3)
-        {
-            newSquareLat++;
-            newSquareLong++;
-        }
-
-        //if latitude/longitude are not both 0, we have GPS lock and can set our home position.
-        //if home position is already set, don't set it again.
-        if (homeSquareLat == -91 && li.latitude != 0 && homeSquareLong == -181 && li.longitude != 0)
-        {
-            Invoke("setHomeGPS", 1);
-        }
-        
+        //TODO: Update this to edit the actual "GPS data" in li (?)
+        // 0/w = up, 1/a = left, 2/s = down, 3/d = right
         if (!homeSet)
         {
             if (Input.GetKeyDown("w")) {
                 rb2.MovePosition(new Vector3(rb2.position.x, rb2.position.y + 1));
-                loadPosition(rb2.position.x, rb2.position.y);
+                AddTile(rb2.position.x, rb2.position.y);
             }
             else if (Input.GetKeyDown("a")) {
                 rb2.MovePosition(new Vector3(rb2.position.x - 1, rb2.position.y));
-                loadPosition(rb2.position.x, rb2.position.y);
+                AddTile(rb2.position.x, rb2.position.y);
             }
             else if (Input.GetKeyDown("s")) {
                 rb2.MovePosition(new Vector3(rb2.position.x, rb2.position.y - 1));
-                loadPosition(rb2.position.x, rb2.position.y);
+                AddTile(rb2.position.x, rb2.position.y);
             }
             else if (Input.GetKeyDown("d")) {
                 rb2.MovePosition(new Vector3(rb2.position.x + 1, rb2.position.y));
-                loadPosition(rb2.position.x, rb2.position.y);
+                AddTile(rb2.position.x, rb2.position.y);
             }
 
-        } else if (newSquareLat != currSquareLat || newSquareLong != currSquareLong)
-        {
-            int zeroNewSquareLong = newSquareLong - homeSquareLong;
-            int zeroNewSquareLat = newSquareLat - homeSquareLat;
-
-            updatePosition(zeroNewSquareLong, zeroNewSquareLat);
-
-            if (zeroNewSquareLong != 0 || zeroNewSquareLat != 0)
-            {
-                loadPosition(zeroNewSquareLong, zeroNewSquareLat);
-                //groundClone = Instantiate(groundPrefab,
-                  //              new Vector3(zeroNewSquareLong, zeroNewSquareLat), Quaternion.identity) as GameObject;
-            }
         }
     }
 
     private void OnApplicationQuit()
     {
-        saveData();
+        //Nothing
     }
 
     private void OnApplicationPause(bool pause)
     {
-        if (homeSet)
-        {
-            saveData();
-        }
+        //Nothing
     }
 
-    void getGPSLoc()
+    void GetGPSLoc()
     {
-        if (Input.location.status != LocationServiceStatus.Running)
+        if (Input.touchCount == 3)
         {
-            /*
-            Debug.Log("WHY DOES THIS NOT WORK");
-            print("WHY DOES THIS NOT WORK");
-
+            newSquareLat++;
+            newSquareLong++;
+        }
+        
+        if (Input.location.status == LocationServiceStatus.Failed)
+        {
+            Debug.Log("Could not determine device location");
+        }
+        else if (Input.location.status != LocationServiceStatus.Running)
+        {
+            Debug.Log("Location Services Status not Running. Status: ");
             Debug.Log(Input.location.status);
-            print(Input.location.status);*/
-
-        } else
+        }
+        else
         {
             li = Input.location.lastData;
+
+            latitude = li.latitude;
+            longitude = li.longitude;
+
+            latitudeText.text = latitude.ToString("N6");
+            longitudeText.text = longitude.ToString("N6");
+
+            newSquareLat = Mathf.RoundToInt(latitude * reducer);
+            squareLatText.text = newSquareLat.ToString();
+
+            newSquareLong = Mathf.RoundToInt(longitude * reducer);
+            squareLongText.text = newSquareLong.ToString();
+
+            if (noSavedFile && !homeSet)
+            {
+                SetHomeGPS(newSquareLat, newSquareLong);
+            }
+
+            if (Input.touchCount == 3)
+            {
+                newSquareLat++;
+                newSquareLong++;
+            }
+
+            if (newSquareLat != currSquareLat || newSquareLong != currSquareLong)
+            {
+
+                Debug.Log("PositionUpdated/ing");
+                UpdatePosition(newSquareLong, newSquareLat);
+
+            }
         }
     }
 
-    void setHomeGPS()
+    void SetHomeGPS(int setSquareLat = -91, int setSquareLong = -181)
     {
-        homeSquareLat = newSquareLat;
-        homeSquareLong = newSquareLong;
+        Debug.Log("SETTING HOME VALUES");
+        
+        homeSquareLat = setSquareLat;
+        homeSquareLong = setSquareLong;
         homeSquareLongText.text = homeSquareLong.ToString();
         homeSquareLatText.text = homeSquareLat.ToString();
         homeSet = true;
     }
 
-    // 0/w = up, 1/a = left, 2/s = down, 3/d = right
-    void updatePosition(int zeroNewSquareLong, int zeroNewSquareLat)
+    void UpdatePosition(int newSquareLong, int newSquareLat)
     {
+
+        int zeroNewSquareLong = newSquareLong - homeSquareLong;
+        int zeroNewSquareLat = newSquareLat - homeSquareLat;
+
         newPosition = new Vector3(zeroNewSquareLong, zeroNewSquareLat);
-        rb2.MovePosition(newPosition);
+        rb2.position = newPosition;
 
         currSquareLat = newSquareLat;
         currSquareLong = newSquareLong;
+
+        if (zeroNewSquareLong != 0 || zeroNewSquareLat != 0)
+        {
+            Debug.Log("NewSquareNotZero");
+            AddTile(zeroNewSquareLong, zeroNewSquareLat);
+        }
     }
 
-    void loadPosition(float rbx, float rby)
+    void AddTile(float rbx, float rby)
     {
+        Debug.Log("Adding Tile");
         string currentPosition = rbx + "," + rby;
         if (!dict.ContainsKey(currentPosition))
         {
@@ -219,34 +238,49 @@ public class Movement : MonoBehaviour {
         }
     }
 
-    void saveData()
+    void SaveData()
     {
-        BinaryFormatter bf = new BinaryFormatter();
-        FileStream file = File.Create(Application.persistentDataPath + "/map.dat");
+        if (noSavedFile || saveFileSynced)
+        {
+            BinaryFormatter bf = new BinaryFormatter();
+            FileStream file = File.Create(Application.persistentDataPath + "/map.dat");
 
-        mapMap data = new mapMap();
-        data.saved = "YES";
-        data.dict = dict;
+            MapMap data = new MapMap();
+            data.saved = "YES";
+            data.dict = dict;
+            data.homeSquareLat = homeSquareLat;
+            data.homeSquareLong = homeSquareLong;
 
-        bf.Serialize(file, data);
-        file.Close();
+            bf.Serialize(file, data);
+            file.Close();
+            
+            saveFileSynced = true;
+            noSavedFile = false;
+        }
     }
 
-    void loadData()
+    void LoadData()
     {
-        Debug.Log("Map file Length: " + new FileInfo(Application.persistentDataPath + "/map.dat").Length);
+        String saveFilename = Application.persistentDataPath + "/map.dat";
 
-        if(File.Exists(Application.persistentDataPath + "/map.dat") && new FileInfo(Application.persistentDataPath + "/map.dat").Length != 0)
+        if (!File.Exists(saveFilename)) {
+            Debug.Log("File doesn't exist.");
+            noSavedFile = true;
+        }
+        else if (new FileInfo(saveFilename).Length == 0)
         {
-            
+            Debug.Log("File length is zero.");
+            noSavedFile = true;
+        }
+        else
+        {
+            Debug.Log("Loading File");
             BinaryFormatter bf = new BinaryFormatter();
-            FileStream file = File.Open(Application.persistentDataPath + "/map.dat", FileMode.Open);
-            mapMap data = (mapMap)bf.Deserialize(file);
+            FileStream file = File.Open(saveFilename, FileMode.Open);
+            MapMap data = (MapMap)bf.Deserialize(file);
             file.Close();
             
             dict = data.dict;
-
-            //List<string> dictlist = new List<string>(data.dict.Keys);
 
             foreach (KeyValuePair<String,int> k in dict)
             {
@@ -256,15 +290,22 @@ public class Movement : MonoBehaviour {
                                             Int32.Parse(xy[1])), 
                                             Quaternion.identity) as GameObject;
             }
+
+            noSavedFile = false;
+            saveFileSynced = true;
+
+            SetHomeGPS(data.homeSquareLat, data.homeSquareLong);
         }
     }
 }
 
 [Serializable] 
-class mapMap
+class MapMap
 {
     public string saved = "NO";
     public Dictionary<string, int> dict;
+    public int homeSquareLat = -91;
+    public int homeSquareLong = -181;
 
     public int getDictVals()
     {

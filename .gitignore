@@ -5,3 +5,4 @@ Temp/
 *.ide-wal
 *.log
 *.ide
+.vs

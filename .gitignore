@@ -4,3 +4,4 @@ Temp/
 *.ide-shm
 *.ide-wal
 *.log
+*.ide

@@ -20,6 +20,9 @@ public class Movement : MonoBehaviour {
     public Text squareLongText;
     public Text homeSquareLatText;
     public Text homeSquareLongText;
+    public Text tileCountText;
+    public Text visitCountText;
+    public Text secondCountText;
 
     //lat&long
     LocationInfo li;
@@ -33,6 +36,9 @@ public class Movement : MonoBehaviour {
     int currSquareLong = -181;
     int homeSquareLat = -91;
     int homeSquareLong = -181;
+    int tileCount = 0;
+    int visitCount = 0;
+    int secondCount = 0;
 
     //game vars
     bool homeSet = false;
@@ -40,7 +46,7 @@ public class Movement : MonoBehaviour {
     bool noSavedFile = false;
     bool saveFileSynced = false;
 
-    Dictionary<string, int> dict = new Dictionary<string,int>();
+    Dictionary<string, TileData> dict = new Dictionary<string,TileData>();
 
     //used to approximate GPS to game board. Higher = more precision, less stability
     int reducer = 10000; //default 10000
@@ -90,40 +96,37 @@ public class Movement : MonoBehaviour {
 
         //start saving the game every 10 second
         Debug.Log("Saving the game every 10 seconds");
-        InvokeRepeating("SaveData", 0.0f, 1f);
+        InvokeRepeating("SaveData", 0.0f, 10f);
 
         while (newSquareLong == 0 && newSquareLat == 0)
         {
             Debug.Log("Waiting for current GPS Location...");
             yield return new WaitForSeconds(1);
         }
-
-        UpdatePosition(newSquareLong, newSquareLat);
     }
 	
 	// Update is called once per frame
 	void Update ()
     {
-
         //TODO: Update this to edit the actual "GPS data" in li (?)
         // 0/w = up, 1/a = left, 2/s = down, 3/d = right
         if (!homeSet)
         {
             if (Input.GetKeyDown("w")) {
                 rb2.MovePosition(new Vector3(rb2.position.x, rb2.position.y + 1));
-                AddTile(rb2.position.x, rb2.position.y);
+                UpdateTile(rb2.position.x, rb2.position.y);
             }
             else if (Input.GetKeyDown("a")) {
                 rb2.MovePosition(new Vector3(rb2.position.x - 1, rb2.position.y));
-                AddTile(rb2.position.x, rb2.position.y);
+                UpdateTile(rb2.position.x, rb2.position.y);
             }
             else if (Input.GetKeyDown("s")) {
                 rb2.MovePosition(new Vector3(rb2.position.x, rb2.position.y - 1));
-                AddTile(rb2.position.x, rb2.position.y);
+                UpdateTile(rb2.position.x, rb2.position.y);
             }
             else if (Input.GetKeyDown("d")) {
                 rb2.MovePosition(new Vector3(rb2.position.x + 1, rb2.position.y));
-                AddTile(rb2.position.x, rb2.position.y);
+                UpdateTile(rb2.position.x, rb2.position.y);
             }
 
         }
@@ -132,21 +135,17 @@ public class Movement : MonoBehaviour {
     private void OnApplicationQuit()
     {
         //Nothing
+        SaveData();
     }
 
     private void OnApplicationPause(bool pause)
     {
         //Nothing
+        SaveData();
     }
 
     void GetGPSLoc()
     {
-        if (Input.touchCount == 3)
-        {
-            newSquareLat++;
-            newSquareLong++;
-        }
-        
         if (Input.location.status == LocationServiceStatus.Failed)
         {
             Debug.Log("Could not determine device location");
@@ -185,12 +184,19 @@ public class Movement : MonoBehaviour {
 
             if (newSquareLat != currSquareLat || newSquareLong != currSquareLong)
             {
-
-                Debug.Log("PositionUpdated/ing");
+                //Debug.Log("PositionUpdated/ing");
                 UpdatePosition(newSquareLong, newSquareLat);
-
             }
         }
+
+
+        IncrementSeconds();
+
+        Debug.Log("ADDING SECOND");
+        int zeroNewSquareLong = newSquareLong - homeSquareLong;
+        int zeroNewSquareLat = newSquareLat - homeSquareLat;
+        string currentPosition = zeroNewSquareLong + "," + zeroNewSquareLat;
+        dict[currentPosition].AddSecond();
     }
 
     void SetHomeGPS(int setSquareLat = -91, int setSquareLong = -181)
@@ -215,27 +221,47 @@ public class Movement : MonoBehaviour {
 
         currSquareLat = newSquareLat;
         currSquareLong = newSquareLong;
-
-        if (zeroNewSquareLong != 0 || zeroNewSquareLat != 0)
-        {
-            Debug.Log("NewSquareNotZero");
-            AddTile(zeroNewSquareLong, zeroNewSquareLat);
-        }
+        
+        UpdateTile(zeroNewSquareLong, zeroNewSquareLat);
     }
 
-    void AddTile(float rbx, float rby)
+    void UpdateTile(float rbx, float rby)
     {
         Debug.Log("Adding Tile");
         string currentPosition = rbx + "," + rby;
         if (!dict.ContainsKey(currentPosition))
         {
-            dict.Add(currentPosition, 1);
-            groundClone = Instantiate(groundPrefab,
+            TileData tile = new TileData();
+            dict.Add(currentPosition, tile);
+            if (rbx != 0 || rby != 0)
+            {
+                groundClone = Instantiate(groundPrefab,
                             new Vector3(rbx, rby), Quaternion.identity) as GameObject;
-        } else
-        {
-            dict[currentPosition]++;
+            }
+            IncrementTiles();
+            Debug.Log(currentPosition);
         }
+        Debug.Log("INCREMENT VISITS BY 1");
+        IncrementVisits();
+        dict[currentPosition].AddVisit();
+    }
+
+    void IncrementTiles()
+    {
+        tileCount++;
+        tileCountText.text = "Tiles: " + tileCount.ToString();
+    }
+
+    void IncrementVisits(int visits = 1)
+    {
+        visitCount += visits;
+        visitCountText.text = "Visits: " + visitCount.ToString();
+    }
+
+    void IncrementSeconds(int seconds = 1)
+    {
+        secondCount += seconds;
+        secondCountText.text = "Seconds: " + secondCount.ToString();
     }
 
     void SaveData()
@@ -282,9 +308,14 @@ public class Movement : MonoBehaviour {
             
             dict = data.dict;
 
-            foreach (KeyValuePair<String,int> k in dict)
+            foreach (KeyValuePair<String,TileData> k in dict)
             {
+                IncrementTiles();
                 string[] xy = k.Key.Split(',');
+                Debug.Log(xy);
+                Debug.Log("INCREMENT VISITS BY "+k.Value.visitCount);
+                IncrementVisits(k.Value.visitCount);
+                IncrementSeconds(k.Value.secondCount);
                 groundClone = Instantiate(groundPrefab,
                                  new Vector3(Int32.Parse(xy[0]), 
                                             Int32.Parse(xy[1])), 
@@ -303,12 +334,35 @@ public class Movement : MonoBehaviour {
 class MapMap
 {
     public string saved = "NO";
-    public Dictionary<string, int> dict;
+    public Dictionary<string, TileData> dict;
     public int homeSquareLat = -91;
     public int homeSquareLong = -181;
 
     public int getDictVals()
     {
         return dict.Count;
+    }
+}
+
+[Serializable]
+class TileData
+{
+    public int visitCount;
+    public int secondCount;
+
+    public TileData()
+    {
+        visitCount = 0;
+        secondCount = 0;
+    }
+
+    public void AddSecond()
+    {
+        secondCount++;
+    }
+
+    public void AddVisit()
+    {
+        visitCount++;
     }
 }
